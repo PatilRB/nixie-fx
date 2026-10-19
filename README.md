@@ -186,6 +186,50 @@ Scene files use Three.js physical light units and glTF conventions (lights
 shine along local -Z, rotations are Euler degrees in Unity's Y·X·Z order,
 colors are sRGB hex). Their `props` list is editor-only stand-in geometry.
 
+## Three.js energy-beam endpoint burst
+
+Use a short-lived world-space spark effect at the beam's moving target. Author a one-second looping point emitter with an eight-particle burst at each loop start, 20 particles/second, a 0.3-second lifetime, and capacity 40. The local fixture uses procedural unlit billboards; the beam line itself belongs to the host game.
+
+When using a three js particle editor, verify the export's `three3d` support report before integration. Load the compiled effect through the bundle loader described in the [NixieFX Three.js runtime documentation](https://nixiefx.com/threejs-runtime/).
+
+With `vfx` mounted in the scene, `effect` loaded, and `target` a Three.js object:
+
+```js
+const endpoint = vfx.createEffect(effect, { seed: 443, autoStart: false });
+const position = new THREE.Vector3();
+let firing = false;
+
+function followTarget() {
+  target.updateWorldMatrix(true, false);
+  target.getWorldPosition(position);
+  endpoint.setTransform({ position: position.toArray() });
+}
+
+function startBeam() {
+  followTarget(); // Put the starting burst at the current target.
+  endpoint.restart();
+  firing = true;
+}
+
+function updateBeam(dtSeconds) {
+  if (firing) followTarget();
+  vfx.update(dtSeconds); // Once per host frame for this renderer.
+}
+
+function stopBeam() {
+  firing = false;
+  endpoint.allowCompletion();
+}
+```
+
+The host also starts/stops its beam geometry. Existing world-space sparks keep their own positions while new emission follows the target. Use `endpoint.stop()` for an immediate clear, and `vfx.destroy()` on scene teardown. Restarting this single instance replaces its previous tail; use independent instances for overlapping beams.
+
+Local adapter checks with `nixie-fx@0.1.20` and `three@0.185.1` verified target following, preserved old particle positions, restart at a new origin, and both graceful drain and immediate clear to zero. The selected effect reported no unsupported features. This does not implement collision, hit detection, or a continuous beam, and does not establish GPU/device performance. The renderer's reserved `clockSpace` option is unused; author the emitter's simulation space instead.
+
+More examples and notes: [Patil's game development site](https://patilrb.github.io/).
+
+*Prepared with AI assistance; results describe the synthetic fixture, not a production game.*
+
 ## Examples
 
 - [Three.js digit embers](./examples/threejs) — the NixieFX landing scene as a
